@@ -142,6 +142,8 @@ class ImageReader:
                                                                            face.rect.top()/config.scale,
                                                                            face.rect.height()/config.scale + face.rect.top()/config.scale))
 
+                        face.details["score"] = face_position[1]
+                        rospy.loginfo("SCORE {}".format(face.details["score"]))
                         self.detected_faces.append(face)
                 else:
                     cpt = 0
@@ -170,15 +172,17 @@ class ImageReader:
                             msgFace.gender = face.details["gender"]
                             msgFace.id = face.details["id"]
                             msgFace.name = face.details["name"]
+                            msgFace.genderProbability = abs(face.details["score"] / 2.7)
+
                             msgFace.boundingBoxe = msgBB
 
                             self.msg.faces.append(msgFace)
-                        rospy.loginfo("PUBLICATION")
                         self.msg.header.stamp = self.time
                         self.faces_pub.publish(self.msg)
                         self.rgb_pub.publish(self.rgb)
                         self.depth_pub.publish(self.depth)
 
+                        self.msg.faces = []
                 if config.show_window:
                     cv2.imshow("image", original)
                     key = cv2.waitKey(1) & 0xFF
