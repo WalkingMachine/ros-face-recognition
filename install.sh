@@ -1,5 +1,3 @@
-wget -P $HOME/dossier
-
 #!/bin/bash
 
 predictor=68
