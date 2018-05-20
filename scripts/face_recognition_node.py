@@ -17,7 +17,7 @@ from ros_face_recognition.msg import Box
 from ros_face_recognition.srv import Face, Name, NameResponse, FaceResponse, Detect, DetectResponse
 from wm_frame_to_box.srv import GetBoundingBoxes3D
 
-from sara_msgs.msg import Faces, FaceMsg, BoundingBox2D, BoundingBoxes2D
+from sara_msgs.msg import Faces, FaceMsg, BoundingBox2D, BoundingBoxes2D, BoundingBoxes3D
 
 _topic = config.topic_name
 _base_dir = os.path.dirname(__file__)
@@ -60,6 +60,9 @@ class ImageReader:
         self.depth =  Image()
 
         self.faces = []
+
+        self.BB2Dfaces = []
+        self.BB3Dfaces = []
 
         self.frame_limit = 0
         self.face_positions = []
@@ -165,6 +168,7 @@ class ImageReader:
                     cpt = cpt + 1
 
             if cpt > 0:
+                listBB2D = BoundingBoxes2D()
                 for index, face in enumerate(self.detected_faces):
                     msgFace = FaceMsg()
                     msgBB = BoundingBox2D()
@@ -180,25 +184,26 @@ class ImageReader:
                     msgFace.name = face.details["name"]
                     msgFace.genderProbability = abs(face.details["score"] / 2.7)
 
-                    msgFace.boundingBoxe = msgBB
-
-                    listBB2D = BoundingBoxes2D()
+                    #msgFace.boundingBoxe = msgBB
                     listBB2D.boundingBoxes.append(msgBB)
                     listBB2D.header.stamp = self.time
 
-
-                    rospy.wait_for_service("/get_3d_bounding_boxes", 1)
-                    serv = rospy.ServiceProxy("/get_3d_bounding_boxes", GetBoundingBoxes3D)
-                    resp = serv(listBB2D,Depth, "/head_xtion_depth_frame","/base_link")
-
-
                     self.msg.faces.append(msgFace)
+
+                rospy.wait_for_service("/get_3d_bounding_boxes", 1)
+                serv = rospy.ServiceProxy("/get_3d_bounding_boxes", GetBoundingBoxes3D)
+                resp = serv(listBB2D,Depth, "/head_xtion_depth_frame","/base_link")
+
+                for index, BB3D in enumerate(resp.boundingBoxes3D.boundingBoxes):
+                    self.msg.faces[index].boundingBox = BB3D
+
                 self.msg.header.stamp = self.time
                 self.faces_pub.publish(self.msg)
-                self.rgb_pub.publish(data)
-                self.depth_pub.publish(Depth)
+                #self.rgb_pub.publish(data)
+                #self.depth_pub.publish(Depth)
 
                 self.msg.faces = []
+                self.BB3Dfaces = []
 
             if config.show_window:
                 cv2.imshow("image", original)
@@ -337,11 +342,9 @@ def main():
     rospy.loginfo("Listening to names controller")
     rospy.Service('/{}/detect'.format(_topic), Detect, image_reader.detect_controller)
 
-    while 1:
-        image_reader.process()
-
     try:
-        rospy.spin()
+        while 1:
+            image_reader.process()
     except KeyboardInterrupt:
         rospy.logwarn("Shutting done ...")
     finally:
