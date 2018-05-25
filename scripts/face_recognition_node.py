@@ -184,6 +184,8 @@ class ImageReader:
                     msgFace.name = face.details["name"]
                     msgFace.genderProbability = abs(face.details["score"] / 2.7)
 
+                    msgBB.probability = msgFace.genderProbability
+
                     #msgFace.boundingBoxe = msgBB
                     listBB2D.boundingBoxes.append(msgBB)
                     listBB2D.header.stamp = self.time
