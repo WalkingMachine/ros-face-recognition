@@ -124,11 +124,10 @@ class ImageReader:
 
                         if face.details["age"] == -1:
                             face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
-                            print "AGE"
-                            print face.details["age"]
 
                     else:
                         face.details["gender"] = face_api.predict_gender(encoding)
+                        face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
                         face_map[face.details["id"]] = face.details
 
                     if face_map[face.details["id"]]["size"] < config.classification_size:
@@ -190,6 +189,7 @@ class ImageReader:
                     msgFace.gender = face.details["gender"]
                     msgFace.id = face.details["id"]
                     msgFace.name = face.details["name"]
+                    msgFace.age = face.details["age"]
                     msgFace.genderProbability = abs(face.details["score"] / 2.7)
 
                     msgBB.probability = msgFace.genderProbability
@@ -270,14 +270,10 @@ class ImageReader:
 
                 if face.details["age"] == -1:
                     face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
-                    print "AGE"
-                    print face.details["age"]
 
             else:
                 face.details["gender"] = face_api.predict_gender(encoding)
                 face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
-                print "AGE"
-                print face.details["age"]
                 face_map[face.details["id"]] = face.details
 
             if face_map[face.details["id"]]["size"] < config.classification_size:
