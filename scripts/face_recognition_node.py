@@ -87,6 +87,7 @@ class ImageReader:
             image = cv2.resize(cv_image, (0, 0), fx=config.scale, fy=config.scale)
 
             self.image_shape = image.shape[:2]
+            image_h, image_w = self.image_shape
 
             original = image.copy()
 
@@ -120,6 +121,12 @@ class ImageReader:
                         if face.details["gender"] == "unknown":
                             face.details["gender"] = face_api.predict_gender(encoding)
 
+
+                        if face.details["age"] == -1:
+                            face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
+                            print "AGE"
+                            print face.details["age"]
+
                     else:
                         face.details["gender"] = face_api.predict_gender(encoding)
                         face_map[face.details["id"]] = face.details
@@ -151,6 +158,7 @@ class ImageReader:
                                                                        face.rect.height()/config.scale + face.rect.top()/config.scale))
 
                     face.details["score"] = face_position[1]
+
                     rospy.loginfo("SCORE {}".format(face.details["score"]))
                     cpt = cpt + 1
                     self.detected_faces.append(face)
@@ -233,6 +241,7 @@ class ImageReader:
             box.gender = face.details["gender"]
             box.label = face.details["id"]
             box.name = face.details["name"]
+            box.age = face.details["age"]
             boxes.append(box)
 
         response = FaceResponse(boxes)
@@ -259,8 +268,16 @@ class ImageReader:
                 if face.details["gender"] == "unknown":
                     face.details["gender"] = face_api.predict_gender(encoding)
 
+                if face.details["age"] == -1:
+                    face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
+                    print "AGE"
+                    print face.details["age"]
+
             else:
                 face.details["gender"] = face_api.predict_gender(encoding)
+                face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
+                print "AGE"
+                print face.details["age"]
                 face_map[face.details["id"]] = face.details
 
             if face_map[face.details["id"]]["size"] < config.classification_size:
@@ -282,6 +299,7 @@ class ImageReader:
             box.gender = face.details["gender"]
             box.label = face.details["id"]
             box.name = face.details["name"]
+            box.age = face.details["age"]
             boxes.append(box)
             rospy.loginfo("{} faces loaded.".format(box.name))
         response = DetectResponse(boxes)

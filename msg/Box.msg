@@ -5,3 +5,4 @@ float32 h
 string name
 string label
 string gender
+int32 age

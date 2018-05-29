@@ -5,6 +5,8 @@ import random
 import time
 import pickle
 import rospy
+from cv_bridge import CvBridge
+from gender_age_service.srv import ListGenderPrediction
 
 _base_dir = os.path.dirname(__file__)
 _data_dir = os.path.join(_base_dir, "data")
@@ -27,6 +29,47 @@ def predict_gender(encoding):
         return "female"
 
     return "unknown"
+
+def predict_age(rect, cv_image, image_h, image_w):
+    left = rect.left() - 10
+    if left < 0:
+        left = 0
+    right = rect.left() + rect.width() + 10
+    if right >= image_w:
+        right = image_w -1
+    top = rect.top() - 40
+    if top < 0:
+        top = 0
+    down = rect.top() + rect.height() + 20
+    if down >= image_h:
+        down = image_h -1
+
+    img = cv_image[top:down, left:right]
+    #cv2.imwrite('/home/quentin/Documents/test.png', img)
+    br = CvBridge()
+    msg_img = br.cv2_to_imgmsg(img)
+    rospy.wait_for_service('prediction')
+    prediction = rospy.ServiceProxy('prediction', ListGenderPrediction)
+    reponsePrediction = prediction(msg_img)
+    if len(reponsePrediction.listPrediction) is 0:
+        return -1
+
+    if len(reponsePrediction.listPrediction) is 1:
+        if reponsePrediction.listPrediction[0].probAge > 0.6:
+            return reponsePrediction.listPrediction[0].ageMin
+        else:
+            return -1
+
+    if len(reponsePrediction.listPrediction) > 1:
+        ageMinReturned = -1
+        maxProb = 0
+        for myPrediction in reponsePrediction.listPrediction:
+            if myPrediction.probAge > 0.6 and myPrediction.probAge > maxProb:
+                maxProb = myPrediction.probAge
+                ageMinReturned = myPrediction.ageMin
+        return ageMinReturned
+
+    return -1
 
 
 class Tracker:
@@ -62,7 +105,7 @@ class Face:
         self.rect = rect
         self.tracker = Tracker(timeout=tracker_timeout)
         tmp_id = str(random.randrange(10000, 99999))
-        self.details = {"id": tmp_id, "gender": "unknown", "name": tmp_id, "size": 0, "score": 0}
+        self.details = {"id": tmp_id, "gender": "unknown", "name": tmp_id, "size": 0, "score": 0, "age": -1}
 
     def update_tracker(self, image, min_quality=5):
         if self.tracker.update_tracker(image, min_quality):
