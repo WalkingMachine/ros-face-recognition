@@ -200,20 +200,23 @@ class ImageReader:
 
                     self.msg.faces.append(msgFace)
 
-                rospy.wait_for_service("/get_3d_bounding_boxes", 1)
-                serv = rospy.ServiceProxy("/get_3d_bounding_boxes", GetBoundingBoxes3D)
-                resp = serv(listBB2D,Depth, "/head_xtion_depth_frame","/base_link")
+                try:
+                    rospy.wait_for_service("/get_3d_bounding_boxes", 1)
+                    serv = rospy.ServiceProxy("/get_3d_bounding_boxes", GetBoundingBoxes3D)
+                    resp = serv(listBB2D,Depth, "/head_xtion_depth_frame","/map")
 
-                for index, BB3D in enumerate(resp.boundingBoxes3D.boundingBoxes):
-                    self.msg.faces[index].boundingBox = BB3D
+                    for index, BB3D in enumerate(resp.boundingBoxes3D.boundingBoxes):
+                        self.msg.faces[index].boundingBox = BB3D
 
-                self.msg.header.stamp = self.time
-                self.faces_pub.publish(self.msg)
-                #self.rgb_pub.publish(data)
-                #self.depth_pub.publish(Depth)
+                    self.msg.header.stamp = self.time
+                    self.faces_pub.publish(self.msg)
+                    #self.rgb_pub.publish(data)
+                    #self.depth_pub.publish(Depth)
 
-                self.msg.faces = []
-                self.BB3Dfaces = []
+                    self.msg.faces = []
+                    self.BB3Dfaces = []
+                except:
+                    print("ERROR with frame to box")
 
             if config.show_window:
                 cv2.imshow("image", original)

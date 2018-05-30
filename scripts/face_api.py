@@ -48,26 +48,30 @@ def predict_age(rect, cv_image, image_h, image_w):
     #cv2.imwrite('/home/quentin/Documents/test.png', img)
     br = CvBridge()
     msg_img = br.cv2_to_imgmsg(img)
-    rospy.wait_for_service('prediction')
-    prediction = rospy.ServiceProxy('prediction', ListGenderPrediction)
-    reponsePrediction = prediction(msg_img)
-    if len(reponsePrediction.listPrediction) is 0:
-        return -1
-
-    if len(reponsePrediction.listPrediction) is 1:
-        if reponsePrediction.listPrediction[0].probAge > 0.6:
-            return reponsePrediction.listPrediction[0].ageMin
-        else:
+    try:
+        rospy.wait_for_service('prediction', timeout=2)
+        prediction = rospy.ServiceProxy('prediction', ListGenderPrediction)
+        reponsePrediction = prediction(msg_img)
+        if len(reponsePrediction.listPrediction) is 0:
             return -1
 
-    if len(reponsePrediction.listPrediction) > 1:
-        ageMinReturned = -1
-        maxProb = 0
-        for myPrediction in reponsePrediction.listPrediction:
-            if myPrediction.probAge > 0.6 and myPrediction.probAge > maxProb:
-                maxProb = myPrediction.probAge
-                ageMinReturned = myPrediction.ageMin
-        return ageMinReturned
+        if len(reponsePrediction.listPrediction) is 1:
+            if reponsePrediction.listPrediction[0].probAge > 0.6:
+                return reponsePrediction.listPrediction[0].ageMin
+            else:
+                return -1
+
+        if len(reponsePrediction.listPrediction) > 1:
+            ageMinReturned = -1
+            maxProb = 0
+            for myPrediction in reponsePrediction.listPrediction:
+                if myPrediction.probAge > 0.6 and myPrediction.probAge > maxProb:
+                    maxProb = myPrediction.probAge
+                    ageMinReturned = myPrediction.ageMin
+            return ageMinReturned
+    except:
+        print("Could not reach gender_age_service")
+        return -1
 
     return -1
 
