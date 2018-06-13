@@ -121,7 +121,6 @@ class ImageReader:
                         if face.details["gender"] == "unknown":
                             face.details["gender"] = face_api.predict_gender(encoding)
 
-
                         if face.details["age"] == -1:
                             face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
 
@@ -203,7 +202,7 @@ class ImageReader:
                 try:
                     rospy.wait_for_service("/get_3d_bounding_boxes", 1)
                     serv = rospy.ServiceProxy("/get_3d_bounding_boxes", GetBoundingBoxes3D)
-                    resp = serv(listBB2D,Depth, "/head_xtion_depth_frame","/map")
+                    resp = serv(listBB2D, Depth, "/head_xtion_depth_frame","/map")
 
                     for index, BB3D in enumerate(resp.boundingBoxes3D.boundingBoxes):
                         self.msg.faces[index].boundingBox = BB3D
@@ -215,8 +214,9 @@ class ImageReader:
 
                     self.msg.faces = []
                     self.BB3Dfaces = []
-                except:
-                    print("ERROR with frame to box")
+
+                except Exception as e:
+                    rospy.logerr("ERROR with frame to box: " + str(e))
 
             if config.show_window:
                 cv2.imshow("image", original)
