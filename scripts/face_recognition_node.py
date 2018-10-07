@@ -115,7 +115,11 @@ class ImageReader:
 
                     predicted_id = classifier.predict(encoding)
                     if predicted_id != 0:
-                        face.details = face_map[predicted_id]
+                        try:
+                            face.details = face_map[predicted_id]
+                        except:
+                            print "an key error has ocurred (line ~121)"
+                            return
 
                         # try to find gender.
                         if face.details["gender"] == "unknown":
@@ -188,7 +192,12 @@ class ImageReader:
                     msgFace.gender = face.details["gender"]
                     msgFace.id = face.details["id"]
                     msgFace.name = face.details["name"]
-                    msgFace.age = face.details["age"]
+
+                    if face.details["age"] >= 0:
+                        msgFace.age = face.details["age"]
+                    else:
+                        msgFace.age = 0
+
                     msgFace.genderProbability = abs(face.details["score"] / 2.7)
 
                     msgBB.probability = msgFace.genderProbability
@@ -202,7 +211,7 @@ class ImageReader:
                 try:
                     rospy.wait_for_service("/get_3d_bounding_boxes", 1)
                     serv = rospy.ServiceProxy("/get_3d_bounding_boxes", GetBoundingBoxes3D)
-                    resp = serv(listBB2D, Depth, "/head_xtion_depth_frame","/map")
+                    resp = serv(listBB2D, Depth, Depth.header.frame_id, "/map")
 
                     for index, BB3D in enumerate(resp.boundingBoxes3D.boundingBoxes):
                         self.msg.faces[index].boundingBox = BB3D
