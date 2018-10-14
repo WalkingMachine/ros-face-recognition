@@ -18,6 +18,8 @@ from ros_face_recognition.srv import Face, Name, NameResponse, FaceResponse, Det
 from wm_frame_to_box.srv import GetBoundingBoxes3D
 
 from sara_msgs.msg import Faces, FaceMsg, BoundingBox2D, BoundingBoxes2D, BoundingBoxes3D
+from message_filters import ApproximateTimeSynchronizer, Subscriber
+
 
 _topic = config.topic_name
 _base_dir = os.path.dirname(__file__)
@@ -49,15 +51,19 @@ class ImageReader:
         self.flagClassificationInProgress = False
 
         self.bridge = CvBridge()
-        #self.image_sub = rospy.Subscriber(config.image_topic, Image, self.process, queue_size=1)
-        #self.depth_sub = rospy.Subscriber(config.depth_topic, Image, self.process_depth, queue_size=1)
+        self.image_sub = Subscriber(config.image_topic, Image)
+        self.depth_sub = Subscriber(config.depth_topic, Image)
+        # Synchronize topics
+        ts = ApproximateTimeSynchronizer([self.image_sub, self.depth_sub], 2, 0.33)
+        ts.registerCallback(self.process)
+
 
         self.faces_pub = rospy.Publisher('/SaraFaceDetector/face', Faces, queue_size=1)
         self.rgb_pub = rospy.Publisher('/SaraFaceDetector/rgb', Image, queue_size=1)
         self.depth_pub = rospy.Publisher('/SaraFaceDetector/depth', Image, queue_size=1)
         self.msg = Faces()
         self.rgb = Image()
-        self.depth =  Image()
+        self.depth = Image()
 
         self.faces = []
 
@@ -78,19 +84,26 @@ class ImageReader:
        #     self.depth = inputData
         #    #self.depth_sub.unregister()
 
-    def process(self):
+    def process(self, data, Depth):
         try:
+            print("loop")
             self.time = rospy.get_rostime()
-            data = rospy.wait_for_message("/head_xtion/rgb/image_raw", Image)
-            Depth = rospy.wait_for_message("/head_xtion/depth/image_raw", Image)
+            # print("loop1")
+            # data = rospy.wait_for_message("/head_xtion/rgb/image_raw", Image)
+            # print("loop2")
+            # Depth = rospy.wait_for_message("/head_xtion/depth/image_raw", Image)
+            # print("loop3")
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+            # print("loop4")
             image = cv2.resize(cv_image, (0, 0), fx=config.scale, fy=config.scale)
 
+            print("loop5")
             self.image_shape = image.shape[:2]
             image_h, image_w = self.image_shape
 
             original = image.copy()
 
+            print("loop6")
             if self.frame_limit % config.skip_frames == 0:
                 self.frame_limit = 0
                 # Detecting face positions
@@ -105,10 +118,13 @@ class ImageReader:
 
                 # Compute the 128D vector that describes the face in img identified by
                 # shape.
+
+                print("loop7")
                 encodings = face_api.face_descriptor(image, self.face_positions)
 
                 cpt = 0
 
+                print("loop8")
                 for face_position, encoding in zip(self.face_positions, encodings):
                     # Create object from face_position.
                     face = face_api.Face(face_position[0], tracker_timeout=config.tracker_timeout)
@@ -126,11 +142,11 @@ class ImageReader:
                             face.details["gender"] = face_api.predict_gender(encoding)
 
                         if face.details["age"] == -1:
-                            face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
+                            face.details["age"] = 1#face_api.predict_age(face.rect, image, image_h, image_w)
 
                     else:
                         face.details["gender"] = face_api.predict_gender(encoding)
-                        face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
+                        face.details["age"] = 1#face_api.predict_age(face.rect, image, image_h, image_w)
                         face_map[face.details["id"]] = face.details
 
                     if face_map[face.details["id"]]["size"] < config.classification_size:
@@ -144,6 +160,7 @@ class ImageReader:
                         with open(os.path.join(face_path, "{}.dump".format(int(time.time()))), 'wb') as fp:
                             pickle.dump(encoding, fp)
 
+                    print("loop8")
                     # Start correlation tracker for face.
                     face.tracker.start_track(image, face_position[0])
 
@@ -209,7 +226,7 @@ class ImageReader:
                     self.msg.faces.append(msgFace)
 
                 try:
-                    rospy.wait_for_service("/get_3d_bounding_boxes", 1)
+                    rospy.wait_for_service("/get_3d_bounding_boxes", 0.01)
                     serv = rospy.ServiceProxy("/get_3d_bounding_boxes", GetBoundingBoxes3D)
                     resp = serv(listBB2D, Depth, Depth.header.frame_id, "/map")
 
@@ -238,6 +255,8 @@ class ImageReader:
             rospy.logerr(e)
 
         self.flagClassificationInProgress = False
+
+        print("loopFin")
         #self.image_sub.unregister()
         #self.depth_sub = rospy.Subscriber(config.depth_topic, Image, self.process_depth, queue_size=1)
 
@@ -281,11 +300,11 @@ class ImageReader:
                     face.details["gender"] = face_api.predict_gender(encoding)
 
                 if face.details["age"] == -1:
-                    face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
+                    face.details["age"] = 1#face_api.predict_age(face.rect, image, image_h, image_w)
 
             else:
                 face.details["gender"] = face_api.predict_gender(encoding)
-                face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
+                face.details["age"] = 1#face_api.predict_age(face.rect, image, image_h, image_w)
                 face_map[face.details["id"]] = face.details
 
             if face_map[face.details["id"]]["size"] < config.classification_size:
@@ -371,8 +390,7 @@ def main():
     rospy.Service('/{}/detect'.format(_topic), Detect, image_reader.detect_controller)
 
     try:
-        while 1:
-            image_reader.process()
+        rospy.spin()
     except KeyboardInterrupt:
         rospy.logwarn("Shutting done ...")
     finally:
