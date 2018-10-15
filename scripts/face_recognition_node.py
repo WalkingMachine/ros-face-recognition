@@ -54,8 +54,8 @@ class ImageReader:
         self.image_sub = Subscriber(config.image_topic, Image)
         self.depth_sub = Subscriber(config.depth_topic, Image)
         # Synchronize topics
-        ts = ApproximateTimeSynchronizer([self.image_sub, self.depth_sub], 2, 0.33)
-        ts.registerCallback(self.process)
+        ts = ApproximateTimeSynchronizer([self.image_sub, self.depth_sub], 6, 0.33)
+        ts.registerCallback(self.synchronisedImageCallback)
 
 
         self.faces_pub = rospy.Publisher('/SaraFaceDetector/face', Faces, queue_size=1)
@@ -78,32 +78,21 @@ class ImageReader:
         self.image_shape = (0, 0)
 
 
-    #def process_depth(self, inputData):
-     #   if self.flagClassificationInProgress is not True:
-      #      self.flagClassificationInProgress = True
-       #     self.depth = inputData
-        #    #self.depth_sub.unregister()
 
-    def process(self, data, Depth):
+    # Callback Function for the synchronised subscribers
+    def synchronisedImageCallback(self, imageRGB, imageDepth):
         try:
-            print("loop")
+            # rospy.rostime.wallsleep(0.1)
             self.time = rospy.get_rostime()
-            # print("loop1")
-            # data = rospy.wait_for_message("/head_xtion/rgb/image_raw", Image)
-            # print("loop2")
-            # Depth = rospy.wait_for_message("/head_xtion/depth/image_raw", Image)
-            # print("loop3")
-            cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
-            # print("loop4")
+            cv_image = self.bridge.imgmsg_to_cv2(imageRGB, "bgr8")
+
             image = cv2.resize(cv_image, (0, 0), fx=config.scale, fy=config.scale)
 
-            print("loop5")
             self.image_shape = image.shape[:2]
             image_h, image_w = self.image_shape
 
             original = image.copy()
 
-            print("loop6")
             if self.frame_limit % config.skip_frames == 0:
                 self.frame_limit = 0
                 # Detecting face positions
@@ -118,13 +107,10 @@ class ImageReader:
 
                 # Compute the 128D vector that describes the face in img identified by
                 # shape.
-
-                print("loop7")
                 encodings = face_api.face_descriptor(image, self.face_positions)
 
                 cpt = 0
 
-                print("loop8")
                 for face_position, encoding in zip(self.face_positions, encodings):
                     # Create object from face_position.
                     face = face_api.Face(face_position[0], tracker_timeout=config.tracker_timeout)
@@ -142,11 +128,11 @@ class ImageReader:
                             face.details["gender"] = face_api.predict_gender(encoding)
 
                         if face.details["age"] == -1:
-                            face.details["age"] = 1#face_api.predict_age(face.rect, image, image_h, image_w)
+                            face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
 
                     else:
                         face.details["gender"] = face_api.predict_gender(encoding)
-                        face.details["age"] = 1#face_api.predict_age(face.rect, image, image_h, image_w)
+                        face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
                         face_map[face.details["id"]] = face.details
 
                     if face_map[face.details["id"]]["size"] < config.classification_size:
@@ -160,7 +146,6 @@ class ImageReader:
                         with open(os.path.join(face_path, "{}.dump".format(int(time.time()))), 'wb') as fp:
                             pickle.dump(encoding, fp)
 
-                    print("loop8")
                     # Start correlation tracker for face.
                     face.tracker.start_track(image, face_position[0])
 
@@ -221,19 +206,20 @@ class ImageReader:
 
                     #msgFace.boundingBoxe = msgBB
                     listBB2D.boundingBoxes.append(msgBB)
-                    listBB2D.header.stamp = self.time
+                    listBB2D.header.stamp = imageDepth.header.stamp
 
                     self.msg.faces.append(msgFace)
 
                 try:
                     rospy.wait_for_service("/get_3d_bounding_boxes", 0.01)
                     serv = rospy.ServiceProxy("/get_3d_bounding_boxes", GetBoundingBoxes3D)
-                    resp = serv(listBB2D, Depth, Depth.header.frame_id, "/map")
+                    resp = serv(listBB2D, imageDepth, imageDepth.header.frame_id, config.output_fame)
 
                     for index, BB3D in enumerate(resp.boundingBoxes3D.boundingBoxes):
                         self.msg.faces[index].boundingBox = BB3D
 
-                    self.msg.header.stamp = self.time
+                    self.msg.header.stamp = imageDepth.header.stamp
+                    self.msg.header.frame_id = config.output_fame
                     self.faces_pub.publish(self.msg)
                     #self.rgb_pub.publish(data)
                     #self.depth_pub.publish(Depth)
@@ -256,7 +242,6 @@ class ImageReader:
 
         self.flagClassificationInProgress = False
 
-        print("loopFin")
         #self.image_sub.unregister()
         #self.depth_sub = rospy.Subscriber(config.depth_topic, Image, self.process_depth, queue_size=1)
 
@@ -300,11 +285,11 @@ class ImageReader:
                     face.details["gender"] = face_api.predict_gender(encoding)
 
                 if face.details["age"] == -1:
-                    face.details["age"] = 1#face_api.predict_age(face.rect, image, image_h, image_w)
+                    face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
 
             else:
                 face.details["gender"] = face_api.predict_gender(encoding)
-                face.details["age"] = 1#face_api.predict_age(face.rect, image, image_h, image_w)
+                face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
                 face_map[face.details["id"]] = face.details
 
             if face_map[face.details["id"]]["size"] < config.classification_size:
@@ -342,10 +327,13 @@ def main():
         scale_param = rospy.search_param("scale")
         image_topic = rospy.search_param("image_topic")
         depth_topic = rospy.search_param("depth_topic")
+        outputFrame = rospy.search_param("output_frame")
         if image_topic is not None:
             config.image_topic = rospy.get_param(image_topic, config.image_topic)
         if depth_topic is not None:
             config.depth_topic = rospy.get_param(depth_topic, config.depth_topic)
+        if outputFrame is not None:
+            config.output_fame = rospy.get_param(outputFrame, config.output_frame)
         if show_window_param is not None:
             config.show_window = rospy.get_param(show_window_param, config.show_window)
         if tracker_quality_param is not None:
