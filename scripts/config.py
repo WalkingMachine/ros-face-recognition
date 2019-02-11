@@ -32,6 +32,7 @@ topic_name = "ros_face_recognition"
 # ROS topic that contains video stream.
 image_topic = "/head_xtion/rgb/image_raw"
 depth_topic = "/head_xtion/depth/image_raw"
+output_frame = "/map"
 
 # Tracker quality of each face.
 face_tracker_quality = 8

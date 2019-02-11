@@ -18,6 +18,8 @@ from ros_face_recognition.srv import Face, Name, NameResponse, FaceResponse, Det
 from wm_frame_to_box.srv import GetBoundingBoxes3D
 
 from sara_msgs.msg import Faces, FaceMsg, BoundingBox2D, BoundingBoxes2D, BoundingBoxes3D
+from message_filters import ApproximateTimeSynchronizer, Subscriber
+
 
 _topic = config.topic_name
 _base_dir = os.path.dirname(__file__)
@@ -49,15 +51,19 @@ class ImageReader:
         self.flagClassificationInProgress = False
 
         self.bridge = CvBridge()
-        #self.image_sub = rospy.Subscriber(config.image_topic, Image, self.process, queue_size=1)
-        #self.depth_sub = rospy.Subscriber(config.depth_topic, Image, self.process_depth, queue_size=1)
+        self.image_sub = Subscriber(config.image_topic, Image)
+        self.depth_sub = Subscriber(config.depth_topic, Image)
+        # Synchronize topics
+        ts = ApproximateTimeSynchronizer([self.image_sub, self.depth_sub], 6, 0.33)
+        ts.registerCallback(self.synchronisedImageCallback)
+
 
         self.faces_pub = rospy.Publisher('/SaraFaceDetector/face', Faces, queue_size=1)
         self.rgb_pub = rospy.Publisher('/SaraFaceDetector/rgb', Image, queue_size=1)
         self.depth_pub = rospy.Publisher('/SaraFaceDetector/depth', Image, queue_size=1)
         self.msg = Faces()
         self.rgb = Image()
-        self.depth =  Image()
+        self.depth = Image()
 
         self.faces = []
 
@@ -72,18 +78,14 @@ class ImageReader:
         self.image_shape = (0, 0)
 
 
-    #def process_depth(self, inputData):
-     #   if self.flagClassificationInProgress is not True:
-      #      self.flagClassificationInProgress = True
-       #     self.depth = inputData
-        #    #self.depth_sub.unregister()
 
-    def process(self):
+    # Callback Function for the synchronised subscribers
+    def synchronisedImageCallback(self, imageRGB, imageDepth):
         try:
+            # rospy.rostime.wallsleep(0.1)
             self.time = rospy.get_rostime()
-            data = rospy.wait_for_message("/head_xtion/rgb/image_raw", Image)
-            Depth = rospy.wait_for_message("/head_xtion/depth/image_raw", Image)
-            cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
+            cv_image = self.bridge.imgmsg_to_cv2(imageRGB, "bgr8")
+
             image = cv2.resize(cv_image, (0, 0), fx=config.scale, fy=config.scale)
 
             self.image_shape = image.shape[:2]
@@ -204,19 +206,20 @@ class ImageReader:
 
                     #msgFace.boundingBoxe = msgBB
                     listBB2D.boundingBoxes.append(msgBB)
-                    listBB2D.header.stamp = self.time
+                    listBB2D.header.stamp = imageDepth.header.stamp
 
                     self.msg.faces.append(msgFace)
 
                 try:
-                    rospy.wait_for_service("/get_3d_bounding_boxes", 1)
+                    rospy.wait_for_service("/get_3d_bounding_boxes", 0.01)
                     serv = rospy.ServiceProxy("/get_3d_bounding_boxes", GetBoundingBoxes3D)
-                    resp = serv(listBB2D, Depth, Depth.header.frame_id, "/map")
+                    resp = serv(listBB2D, imageDepth, imageDepth.header.frame_id, config.output_fame)
 
                     for index, BB3D in enumerate(resp.boundingBoxes3D.boundingBoxes):
                         self.msg.faces[index].boundingBox = BB3D
 
-                    self.msg.header.stamp = self.time
+                    self.msg.header.stamp = imageDepth.header.stamp
+                    self.msg.header.frame_id = config.output_fame
                     self.faces_pub.publish(self.msg)
                     #self.rgb_pub.publish(data)
                     #self.depth_pub.publish(Depth)
@@ -238,6 +241,7 @@ class ImageReader:
             rospy.logerr(e)
 
         self.flagClassificationInProgress = False
+
         #self.image_sub.unregister()
         #self.depth_sub = rospy.Subscriber(config.depth_topic, Image, self.process_depth, queue_size=1)
 
@@ -323,10 +327,13 @@ def main():
         scale_param = rospy.search_param("scale")
         image_topic = rospy.search_param("image_topic")
         depth_topic = rospy.search_param("depth_topic")
+        outputFrame = rospy.search_param("output_frame")
         if image_topic is not None:
             config.image_topic = rospy.get_param(image_topic, config.image_topic)
         if depth_topic is not None:
             config.depth_topic = rospy.get_param(depth_topic, config.depth_topic)
+        if outputFrame is not None:
+            config.output_fame = rospy.get_param(outputFrame, config.output_frame)
         if show_window_param is not None:
             config.show_window = rospy.get_param(show_window_param, config.show_window)
         if tracker_quality_param is not None:
@@ -371,8 +378,7 @@ def main():
     rospy.Service('/{}/detect'.format(_topic), Detect, image_reader.detect_controller)
 
     try:
-        while 1:
-            image_reader.process()
+        rospy.spin()
     except KeyboardInterrupt:
         rospy.logwarn("Shutting done ...")
     finally:
