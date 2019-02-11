@@ -1,7 +1,0 @@
-<launch>
-  <node name="ros_face_recognition" pkg="ros_face_recognition" type="face_recognition_node.py" respawn="false" output="screen">
-    <param name="show_window" value="True" />
-    <param name="tracker_quality" value="5" />
-    <param name="scale" value="0.75" />
-  </node>
-</launch>
