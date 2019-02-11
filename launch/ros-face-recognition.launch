@@ -1,5 +1,8 @@
 <launch>
 
+  <node name="ros_face_recognition_rgb"   pkg="image_transport" type="republish" output="screen" args="theora in:=/head_xtion/rgb/image_raw raw out:=/head_xtion/rgb/image_raw_uncompressed" />
+  <node name="ros_face_recognition_depth" pkg="image_transport" type="republish" output="screen" args="compressedDepth in:=/head_xtion/depth/image_raw raw out:=/head_xtion/depth/image_raw_uncompressed" />
+
   <node name="ros_face_recognition" pkg="ros_face_recognition" type="face_recognition_node.py" respawn="false" output="screen">
     <param name="show_window" value="False" />
     <param name="tracker_quality" value="5" />
