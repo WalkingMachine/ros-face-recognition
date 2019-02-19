@@ -127,12 +127,9 @@ class ImageReader:
                         if face.details["gender"] == "unknown":
                             face.details["gender"] = face_api.predict_gender(encoding)
 
-                        if face.details["age"] == -1:
-                            face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
 
                     else:
                         face.details["gender"] = face_api.predict_gender(encoding)
-                        face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
                         face_map[face.details["id"]] = face.details
 
                     if face_map[face.details["id"]]["size"] < config.classification_size:
@@ -284,12 +281,9 @@ class ImageReader:
                 if face.details["gender"] == "unknown":
                     face.details["gender"] = face_api.predict_gender(encoding)
 
-                if face.details["age"] == -1:
-                    face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
 
             else:
                 face.details["gender"] = face_api.predict_gender(encoding)
-                face.details["age"] = face_api.predict_age(face.rect, image, image_h, image_w)
                 face_map[face.details["id"]] = face.details
 
             if face_map[face.details["id"]]["size"] < config.classification_size:
