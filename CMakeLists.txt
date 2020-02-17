@@ -8,6 +8,11 @@ find_package(catkin REQUIRED COMPONENTS
    message_generation
 )
 
+# Installation
+execute_process (
+    COMMAND bash -c "cd ../src/ros-face-recognition/ ; ./install.sh"
+)
+
 add_message_files(
   FILES
   Box.msg
